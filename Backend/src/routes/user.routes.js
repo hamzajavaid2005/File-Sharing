@@ -1,26 +1,31 @@
 import express from "express";
 import { verifyJWT } from "../middlewares/jwt.middleware.js";
+import { verifyEmailMiddleware } from "../middlewares/verifyEmail.middleware.js";
 import {
     registerUser,
+    verifyEmail,
     loginUser,
     logoutUser,
-    updatePassword,
+    verifyLoginCode,
+    getProtectedData,
     updateUserProfile,
-    deleteProfile,
 } from "../controllers/user.controller.js";
 
 const router = express.Router();
 
+// Public routes (no authentication required)
 router.route("/register").post(registerUser);
-
+router.route("/verify-email").post(verifyEmail);
 router.route("/login").post(loginUser);
+router.route("/verify-login").post(verifyLoginCode);
 
-router.route("/logout").post(verifyJWT, logoutUser);
+// Protected routes (require authentication and verified email)
+router.route("/logout").post(verifyJWT, verifyEmailMiddleware, logoutUser);
+router.route("/profile/update").patch(verifyJWT, verifyEmailMiddleware, updateUserProfile);
 
-router.route("/update-password").post(verifyJWT, updatePassword);
-
-router.route("/update-profile").post(verifyJWT, updateUserProfile);
-
-router.route("/delete-profile").delete(verifyJWT, deleteProfile);
+// Add more protected routes here...
+router
+    .route("/protected-route")
+    .get(verifyJWT, verifyEmailMiddleware, getProtectedData);
 
 export default router;

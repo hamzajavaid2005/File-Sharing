@@ -24,6 +24,10 @@ const userSchema = new Schema(
             type: String,
             required: true,
         },
+        isEmailVerified: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
@@ -66,6 +70,36 @@ userSchema.methods.generateRefreshToken = async function () {
             expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
         }
     );
+};
+
+userSchema.methods.verifyEmailCode = async function (verificationCode) {
+    try {
+        // Find the verification code document
+        const verificationDoc = await mongoose
+            .model("VerificationCode")
+            .findOne({
+                email: this.email,
+                code: verificationCode,
+                isVerified: false,
+            });
+
+        // If no verification code found or it's expired
+        if (!verificationDoc) {
+            throw new Error("Invalid or expired verification code");
+        }
+
+        // Mark verification code as used
+        verificationDoc.isVerified = true;
+        await verificationDoc.save();
+
+        // Update user's email verification status
+        this.isEmailVerified = true;
+        await this.save();
+
+        return true;
+    } catch (error) {
+        throw error;
+    }
 };
 
 const User = mongoose.model("User", userSchema);

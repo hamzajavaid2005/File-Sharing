@@ -41,34 +41,19 @@ export const getVerificationEmailTemplate = (code) => {
                 .verification-code {
                     font-size: 32px;
                     font-weight: bold;
-                    color: #4CAF50;
-                    letter-spacing: 5px;
-                    padding: 15px;
+                    letter-spacing: 8px;
+                    color: #4F46E5;
                     background-color: #f8f8f8;
-                    border-radius: 5px;
+                    padding: 15px 25px;
+                    border-radius: 8px;
                     margin: 20px 0;
-                }
-                .message {
-                    color: #666;
-                    line-height: 1.6;
-                    margin-bottom: 30px;
+                    display: inline-block;
                 }
                 .footer {
                     text-align: center;
                     padding-top: 20px;
                     border-top: 2px solid #f0f0f0;
-                    color: #999;
-                    font-size: 12px;
-                }
-                .warning {
-                    color: #ff6b6b;
-                    font-size: 12px;
-                    margin-top: 15px;
-                }
-                .logo {
-                    width: 150px;
-                    height: auto;
-                    margin-bottom: 20px;
+                    color: #666;
                 }
             </style>
         </head>
@@ -76,26 +61,23 @@ export const getVerificationEmailTemplate = (code) => {
             <div class="container">
                 <div class="email-wrapper">
                     <div class="header">
-                        <h1>Email Verification</h1>
+                        <h1>Verify Your Email</h1>
                     </div>
                     <div class="content">
-                        <p class="message">
-                            Thank you for registering with our File Sharing App! To complete your registration, 
-                            please use the verification code below:
+                        <p>Thank you for registering! Please use the verification code below to verify your email address:</p>
+                        
+                        <div class="verification-code">${code}</div>
+                        
+                        <p style="margin-top: 30px; color: #666;">
+                            This code will expire in 10 minutes.
                         </p>
-                        <div class="verification-code">
-                            ${code}
-                        </div>
-                        <p class="message">
-                            This code will expire in <strong>10 minutes</strong>.
-                        </p>
-                        <p class="warning">
-                            If you didn't request this verification code, please ignore this email.
+                        
+                        <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                            If you didn't request this code, you can safely ignore this email.
                         </p>
                     </div>
                     <div class="footer">
-                        <p>© ${new Date().getFullYear()} File Sharing App. All rights reserved.</p>
-                        <p>This is an automated email, please do not reply.</p>
+                        <p> ${new Date().getFullYear()} File Share. All rights reserved.</p>
                     </div>
                 </div>
             </div>
@@ -192,7 +174,7 @@ export const getWelcomeEmailTemplate = (username) => {
                         </a>
                     </div>
                     <div class="footer">
-                        <p>© ${new Date().getFullYear()} File Sharing App. All rights reserved.</p>
+                        <p> ${new Date().getFullYear()} File Sharing App. All rights reserved.</p>
                         <p>This is an automated email, please do not reply.</p>
                     </div>
                 </div>

@@ -1,107 +1,117 @@
-import mongoose, { Schema } from "mongoose";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
 
-const userSchema = new Schema(
-    {
-        name: {
-            type: String,
-            required: true,
-        },
-        username: {
-            type: String,
-            required: true,
-            unique: true,
-            toLowerCase: true,
-        },
-        email: {
-            type: String,
-            required: true,
-            unique: true,
-            toLowerCase: true,
-        },
-        password: {
-            type: String,
-            required: true,
-        },
-        isEmailVerified: {
-            type: Boolean,
-            default: false,
-        },
+const userSchema = new mongoose.Schema({
+    email: {
+        type: String,
+        required: [true, "Email is required"],
+        unique: true,
+        trim: true,
+        lowercase: true,
+        match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/, "Please enter a valid email"]
     },
-    { timestamps: true }
-);
-
-userSchema.pre("save", async function (next) {
-    if (!this.isModified("password")) {
-        return next();
+    name: {
+        type: String,
+        required: [true, "Name is required"],
+        trim: true,
+        minLength: [3, "Name must be at least 3 characters"],
+        maxLength: [50, "Name cannot exceed 50 characters"]
+    },
+    password: {
+        type: String,
+        required: [true, "Password is required"],
+        minLength: [8, "Password must be at least 8 characters"],
+        select: false
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    verificationCode: {
+        type: String,
+        select: false
+    },
+    verificationCodeExpires: {
+        type: Date,
+        select: false
+    },
+    loginCode: {
+        type: String,
+        select: false
+    },
+    loginCodeExpires: {
+        type: Date,
+        select: false
+    },
+    refreshToken: {
+        type: String,
+        select: false
     }
-
-    this.password = await bcrypt.hash(this.password, 10);
-    return next();
+}, {
+    timestamps: true
 });
 
-userSchema.methods.isPasswordCorrect = async function (password) {
+// Hash password before saving
+userSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) return next();
+    
+    try {
+        const salt = await bcrypt.genSalt(10);
+        this.password = await bcrypt.hash(this.password, salt);
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// Compare password method
+userSchema.methods.comparePassword = async function(password) {
     return await bcrypt.compare(password, this.password);
 };
 
-userSchema.methods.generateAccessToken = async function () {
+// Generate verification code
+userSchema.methods.generateVerificationCode = function() {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    this.verificationCode = code;
+    this.verificationCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    return code;
+};
+
+// Generate login code
+userSchema.methods.generateLoginCode = function() {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    this.loginCode = code;
+    this.loginCodeExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+    return code;
+};
+
+// Generate access token
+userSchema.methods.generateAccessToken = function() {
     return jwt.sign(
         {
             _id: this._id,
-            fullName: this.fullName,
-            username: this.username,
             email: this.email,
+            name: this.name
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY
         }
     );
 };
 
-userSchema.methods.generateRefreshToken = async function () {
+// Generate refresh token
+userSchema.methods.generateRefreshToken = function() {
     return jwt.sign(
         {
-            _id: this._id,
+            _id: this._id
         },
         process.env.REFRESH_TOKEN_SECRET,
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY,
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY
         }
     );
 };
 
-userSchema.methods.verifyEmailCode = async function (verificationCode) {
-    try {
-        // Find the verification code document
-        const verificationDoc = await mongoose
-            .model("VerificationCode")
-            .findOne({
-                email: this.email,
-                code: verificationCode,
-                isVerified: false,
-            });
-
-        // If no verification code found or it's expired
-        if (!verificationDoc) {
-            throw new Error("Invalid or expired verification code");
-        }
-
-        // Mark verification code as used
-        verificationDoc.isVerified = true;
-        await verificationDoc.save();
-
-        // Update user's email verification status
-        this.isEmailVerified = true;
-        await this.save();
-
-        return true;
-    } catch (error) {
-        throw error;
-    }
-};
-
-const User = mongoose.model("User", userSchema);
-
-export default User;
+export const User = mongoose.model('User', userSchema);

@@ -3,15 +3,26 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import {
-    uploadOnCloudinary,
+    uploadToCloudinary,
     deleteFromCloudinary,
 } from "../utils/cloudinary.js"; // Helper to handle Cloudinary uploads
 import { File } from "../models/file.model.js"; // File model
+import fs from 'fs';
 
 // Upload a file
 const uploadFile = asyncHandler(async (req, res) => {
     try {
-        
+        console.log("Upload request received:", {
+            body: req.body,
+            file: req.file,
+            user: req.user?._id
+        });
+
+        // Check user authentication
+        if (!req.user?._id) {
+            throw new ApiError(401, "Authentication required");
+        }
+
         // Get the file from the request
         const file = req.file;
 
@@ -20,16 +31,32 @@ const uploadFile = asyncHandler(async (req, res) => {
             throw new ApiError(400, "File is required");
         }
 
-        console.log("Uploading file:", file.path); // Debug log
+        // Validate file size (max 100MB)
+        const maxSize = 100 * 1024 * 1024; // 100MB in bytes
+        if (file.size > maxSize) {
+            throw new ApiError(400, "File size too large. Maximum size is 100MB");
+        }
 
-        // Generate a unique name by appending a UUID to the original file name
+        // Validate file path
+        if (!file.path || !fs.existsSync(file.path)) {
+            throw new ApiError(400, "Invalid file upload");
+        }
+
+        console.log("Processing file:", {
+            originalname: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            path: file.path
+        });
+
+        // Generate a unique name
         const uniqueName = `${uuidv4()}-${file.originalname}`;
 
-        // Upload the file to Cloudinary
+        // Upload to Cloudinary
         let cloudinaryResponse;
         try {
-            cloudinaryResponse = await uploadOnCloudinary(file.path);
-            console.log("Cloudinary Response:", cloudinaryResponse); // Debug log
+            cloudinaryResponse = await uploadToCloudinary(file.path);
+            console.log("Cloudinary upload successful:", cloudinaryResponse);
         } catch (error) {
             console.error("Cloudinary upload error:", error);
             throw new ApiError(
@@ -38,33 +65,72 @@ const uploadFile = asyncHandler(async (req, res) => {
             );
         }
 
-        // Ensure the Cloudinary upload was successful
-        if (!cloudinaryResponse || !cloudinaryResponse.secure_url) {
+        // Validate Cloudinary response
+        if (!cloudinaryResponse?.url) {
+            console.error("Invalid Cloudinary response:", cloudinaryResponse);
             throw new ApiError(500, "Failed to get upload URL from Cloudinary");
         }
 
-        // Save the file details in the database with the unique name and sharable link
+        // Create file record in database
         const fileData = await File.create({
-            name: uniqueName, // Use the unique name generated
-            url: cloudinaryResponse.secure_url, // This is the sharable, secure link
-            size: cloudinaryResponse.bytes,
-            public_id: cloudinaryResponse.public_id,
-            owner: req.user._id, // Assuming `req.user` contains the authenticated user's info
+            name: uniqueName,
+            url: cloudinaryResponse.url,
+            size: cloudinaryResponse.size || file.size,
+            public_id: cloudinaryResponse.publicId,
+            owner: req.user._id,
+            format: cloudinaryResponse.format,
+            resourceType: cloudinaryResponse.resourceType,
+            mimeType: file.mimetype,
+            ...(cloudinaryResponse.duration && { duration: cloudinaryResponse.duration }),
+            ...(cloudinaryResponse.width && { width: cloudinaryResponse.width }),
+            ...(cloudinaryResponse.height && { height: cloudinaryResponse.height }),
+            ...(cloudinaryResponse.thumbnailUrl && { thumbnailUrl: cloudinaryResponse.thumbnailUrl }),
+            ...(cloudinaryResponse.hlsUrls && { 
+                isHLS: true,
+                masterPlaylistUrl: cloudinaryResponse.url,
+                hlsStreams: cloudinaryResponse.hlsUrls.map(stream => ({
+                    quality: stream.type === 'master' ? 'master' : 'segment',
+                    url: stream.url,
+                    public_id: stream.publicId
+                }))
+            })
         });
 
-        // Return a success response with the sharable link
-        return res
-            .status(201)
-            .json(
-                new ApiResponse(
-                    201,
-                    { fileData, sharableLink: cloudinaryResponse.secure_url },
-                    "File uploaded and saved successfully"
-                )
-            );
+        console.log("File record created:", fileData);
+
+        // Return success response
+        return res.status(201).json(
+            new ApiResponse(
+                201,
+                {
+                    file: fileData,
+                    url: cloudinaryResponse.url,
+                    thumbnailUrl: cloudinaryResponse.thumbnailUrl
+                },
+                "File uploaded successfully"
+            )
+        );
     } catch (error) {
         console.error("File upload error:", error);
-        throw error;
+        
+        // Clean up any temporary files if they exist
+        if (req.file?.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (cleanupError) {
+                console.error("Error cleaning up temporary file:", cleanupError);
+            }
+        }
+        
+        // Handle specific error types
+        if (error instanceof ApiError) {
+            throw error;
+        }
+        
+        throw new ApiError(
+            error.status || 500,
+            error.message || "Something went wrong while uploading the file"
+        );
     }
 });
 
@@ -99,7 +165,7 @@ const updateFile = asyncHandler(async (req, res) => {
     // Upload the new file to Cloudinary
     let uploadFile;
     try {
-        uploadFile = await uploadOnCloudinary(fileLocalPath);
+        uploadFile = await uploadToCloudinary(fileLocalPath);
         if (!uploadFile?.secure_url) {
             throw new ApiError(500, "Error while uploading file to Cloudinary");
         }

@@ -14,7 +14,7 @@ const startServer = async () => {
         await connectDB();
 
         // Try different ports starting from the default
-        const startPort = parseInt(process.env.PORT) || 4001;
+        const startPort = parseInt(process.env.PORT) || 4002;
         const maxPortAttempts = 10;
         let server;
         let currentPort = startPort;

@@ -1,144 +1,85 @@
 import nodemailer from "nodemailer";
 import { ApiError } from "./ApiError.js";
-import VerificationCode from "../models/verificationCode.model.js";
-import { getVerificationEmailTemplate, getWelcomeEmailTemplate } from "./emailTemplates.js";
 
 // Create nodemailer transporter
 const createTransporter = () => {
     try {
-        // Create transporter with simple authentication
         const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 587,
+            service: 'gmail',
             auth: {
                 user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASSWORD.replace(/\s+/g, '') // Remove any spaces
-            },
-            debug: true, // Enable debug logs
-            logger: true // Enable logger
+                pass: process.env.EMAIL_PASSWORD
+            }
         });
-
         return transporter;
     } catch (error) {
         console.error("Error creating transporter:", error);
-        throw error;
+        throw new ApiError(500, "Failed to initialize email service");
     }
 };
 
-let transporter = null;
-
-// Initialize transporter
-const initializeTransporter = async () => {
-    try {
-        if (!transporter) {
-            transporter = createTransporter();
-            // Test the connection
-            await new Promise((resolve, reject) => {
-                transporter.verify((error, success) => {
-                    if (error) {
-                        console.error("Transporter verification failed:", error);
-                        reject(error);
-                    } else {
-                        console.log("Server is ready to send emails");
-                        resolve(success);
-                    }
-                });
-            });
-        }
-        return transporter;
-    } catch (error) {
-        console.error("Failed to initialize email transporter:", error);
-        throw new Error(`Email service initialization failed: ${error.message}`);
-    }
-};
-
-const generateVerificationCode = () => {
+// Generate a random 6-digit verification code
+export const generateVerificationCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
-export const sendVerificationEmail = async (email) => {
+// Generic email sending function
+export const sendEmail = async (to, subject, htmlContent) => {
     try {
-        // Ensure transporter is initialized
-        if (!transporter) {
-            await initializeTransporter();
-        }
-
-        const code = generateVerificationCode();
-
-        // Save verification code
-        await VerificationCode.findOneAndUpdate(
-            { email },
-            {
-                code,
-                isVerified: false,
-                createdAt: new Date()
-            },
-            { upsert: true }
-        );
-
-        // Configure email options with new template
+        const transporter = createTransporter();
+        
         const mailOptions = {
-            from: {
-                name: "File Sharing App",
-                address: process.env.EMAIL_USER
-            },
-            to: email,
-            subject: "Verify Your Email - File Sharing App",
-            html: getVerificationEmailTemplate(code)
+            from: process.env.EMAIL_USER,
+            to,
+            subject,
+            html: htmlContent
         };
 
-        // Send email
-        const info = await transporter.sendMail(mailOptions);
-        console.log("Email sent successfully:", info.response);
-        return true;
+        await transporter.sendMail(mailOptions);
+        console.log("Email sent successfully to:", to);
     } catch (error) {
-        console.error("Email sending error:", error);
-        throw new ApiError(500, `Error sending verification email: ${error.message}`);
+        console.error("Error sending email:", error);
+        throw new ApiError(500, "Failed to send email. Please try again later.");
     }
 };
 
+// Send verification email
+export const sendVerificationEmail = async (email, code) => {
+    try {
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #333;">Verify Your Email</h2>
+                <p>Your verification code is:</p>
+                <h1 style="color: #4F46E5; font-size: 32px; letter-spacing: 5px; text-align: center; padding: 20px; background: #F3F4F6; border-radius: 8px;">${code}</h1>
+                <p style="color: #666;">This code will expire in 10 minutes.</p>
+                <p style="color: #666;">If you didn't request this code, please ignore this email.</p>
+            </div>
+        `;
+        
+        await sendEmail(email, 'Verify Your Email - File Sharing App', htmlContent);
+    } catch (error) {
+        throw new ApiError(500, "Failed to send verification email. Please try again later.");
+    }
+};
+
+// Send welcome email
 export const sendWelcomeEmail = async (email, username) => {
     try {
-        // Ensure transporter is initialized
-        if (!transporter) {
-            await initializeTransporter();
-        }
-
-        // Configure email options with welcome template
-        const mailOptions = {
-            from: {
-                name: "File Sharing App",
-                address: process.env.EMAIL_USER
-            },
-            to: email,
-            subject: "Welcome to File Sharing App!",
-            html: getWelcomeEmailTemplate(username)
-        };
-
-        // Send email
-        const info = await transporter.sendMail(mailOptions);
-        console.log("Welcome email sent successfully:", info.response);
-        return true;
+        const htmlContent = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #333;">Welcome ${username}!</h2>
+                <p>Thank you for joining our File Sharing App. Your account has been successfully verified.</p>
+                <p>You can now start sharing files securely with others.</p>
+                <div style="margin-top: 20px; padding: 20px; background: #F3F4F6; border-radius: 8px;">
+                    <p style="margin: 0; color: #666;">Need help getting started?</p>
+                    <p style="margin: 5px 0 0; color: #666;">Check out our documentation or contact our support team.</p>
+                </div>
+            </div>
+        `;
+        
+        await sendEmail(email, 'Welcome to File Sharing App!', htmlContent);
     } catch (error) {
-        console.error("Welcome email sending error:", error);
-        throw new ApiError(500, `Error sending welcome email: ${error.message}`);
+        console.error("Error sending welcome email:", error);
+        // Don't throw error for welcome email as it's not critical
     }
-};
-
-export const verifyCode = async (email, code) => {
-    const verificationRecord = await VerificationCode.findOne({
-        email,
-        code,
-        isVerified: false,
-    });
-
-    if (!verificationRecord) {
-        return false;
-    }
-
-    // Mark code as verified
-    verificationRecord.isVerified = true;
-    await verificationRecord.save();
-
-    return true;
 };

@@ -7,12 +7,20 @@ import { ApiResponse } from "./utils/ApiResponse.js";
 
 const app = express();
 
+// Logging middleware
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+});
+
 // Security headers
 app.use(helmet());
 
 // CORS configuration
 const allowedOrigins = [
     'http://localhost:5176',
+    'http://localhost:5173',
+    'http://localhost:3000',
     process.env.FRONTEND_URL || '*'
 ];
 
@@ -37,9 +45,21 @@ app.use(cors(corsOptions));
 // Enable pre-flight requests for all routes
 app.options('*', cors(corsOptions));
 
-// Increase payload limits for large file uploads
-app.use(express.json({ limit: '100mb' }));
+// Body parsing middleware
+app.use(express.json({
+    limit: '100mb',
+    verify: (req, res, buf) => {
+        try {
+            JSON.parse(buf.toString());
+        } catch (e) {
+            console.error('Invalid JSON:', e);
+            throw new Error('Invalid JSON');
+        }
+    }
+}));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+
+// Increase payload limits for large file uploads
 app.use(express.static("public"));
 app.use(cookieParser());
 
@@ -49,6 +69,11 @@ import fileRoutes from "./routes/file.routes.js";
 
 app.use("/api/users", userRoutes);
 app.use("/api/files", fileRoutes);
+
+// Health check route
+app.get("/api/health", (req, res) => {
+    res.status(200).json(new ApiResponse(200, null, "Server is healthy"));
+});
 
 // 404 handler should be after routes but before error handler
 app.use((req, res) => {

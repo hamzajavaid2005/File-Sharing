@@ -1,17 +1,17 @@
 import express from 'express';
 import { verifyJWT } from '../middleware/auth.middleware.js';
 import {
-    registerUserController as registerUser,
-    loginController as login,
-    verifyEmailController as verifyEmail,
-    resendVerificationController as resendVerification,
-    verifyLoginCodeController as verifyLoginCode,
-    resendLoginCodeController as resendLoginCode,
-    logoutUserController as logoutUser,
-    refreshTokenController as refreshToken,
-    updateUserProfileController as updateUserProfile,
-    verifyTokenController as verifyToken,
-    getCurrentUserController as getCurrentUser
+    registerUser,
+    login,
+    verifyEmail,
+    resendVerification,
+    verifyLoginCode,
+    resendLoginCode,
+    logoutUser,
+    refreshToken,
+    updateUserProfile,
+    verifyToken,
+    getCurrentUser
 } from "../controllers/user.controller.js";
 
 const router = express.Router();

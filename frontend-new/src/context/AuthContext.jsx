@@ -3,7 +3,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 
 // Configure axios defaults
-axios.defaults.baseURL = 'http://localhost:4001/api';
+axios.defaults.baseURL = 'http://localhost:10000/api';
 axios.defaults.withCredentials = true;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 
@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const response = await axios.post('/users/login', { email, password });
+            const response = await axios.post('/api/users/login', { email, password });
             const { data } = response.data;
 
             if (data.requiresVerification) {
@@ -183,13 +183,14 @@ export const AuthProvider = ({ children }) => {
                 requiresVerification: false
             };
         } catch (error) {
+            console.error('Login Error:', error.response?.data || error.message);
             return handleApiError(error, 'Login failed');
         }
     };
 
     const verifyLoginCode = async (email, code) => {
         try {
-            const response = await axios.post('/users/verify-login', { email, code });
+            const response = await axios.post('/api/users/verify-login', { email, code });
             const { data } = response.data;
 
             if (data.accessToken) {
@@ -200,6 +201,7 @@ export const AuthProvider = ({ children }) => {
 
             return handleApiError(new Error('Invalid response from server'));
         } catch (error) {
+            console.error('Verify Login Code Error:', error.response?.data || error.message);
             return handleApiError(error, 'Verification failed');
         }
     };

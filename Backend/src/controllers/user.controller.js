@@ -134,50 +134,68 @@ const registerUserController = async (req, res) => {
     }
 };
 
-const loginController = async (req, res) => {
-    try {
-        const { email, password } = req.body;
+const loginController = asyncHandler(async (req, res) => {
+    console.log('Login Request Body:', req.body);
 
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+        console.error('Missing email or password');
+        throw new ApiError(400, "Email and password are required");
+    }
+
+    try {
         // Find user and include password field
-        const user = await User.findOne({ email }).select('+password');
+        const user = await User.findOne({ email }).select("+password");
+        
         if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid credentials'
-            });
+            console.error(`User not found with email: ${email}`);
+            throw new ApiError(401, "Invalid credentials");
         }
 
         // Check password
-        const isPasswordValid = await user.comparePassword(password);
+        let isPasswordValid;
+        try {
+            isPasswordValid = await user.comparePassword(password);
+        } catch (compareError) {
+            console.error('Password comparison error:', compareError);
+            throw new ApiError(500, "Error validating credentials");
+        }
+
         if (!isPasswordValid) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid credentials'
-            });
+            console.error(`Invalid password for email: ${email}`);
+            throw new ApiError(401, "Invalid credentials");
+        }
+
+        // Check if user is verified
+        if (!user.isVerified) {
+            throw new ApiError(403, "Please verify your email first");
         }
 
         // Generate login verification code
         const loginCode = user.generateLoginCode();
-        await user.save();
+        
+        try {
+            await user.save();
+        } catch (saveError) {
+            console.error('Error saving user:', saveError);
+            throw new ApiError(500, "Could not generate login code");
+        }
 
-        // TODO: Send login code via email
-        console.log('Login code:', loginCode);
-
-        return res.status(200).json({
-            success: true,
-            data: {
+        // Send response
+        return res.status(200).json(
+            new ApiResponse(200, {
                 requiresVerification: true,
-                email: user.email
-            }
-        });
+                email: user.email,
+                loginCodeSent: true
+            }, "Login code generated successfully")
+        );
     } catch (error) {
-        console.error('Login error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Login failed'
-        });
+        console.error('Login controller error:', error);
+        throw error;
     }
-};
+});
 
 const verifyLoginCodeController = async (req, res) => {
     try {

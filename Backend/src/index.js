@@ -8,46 +8,28 @@ dotenv.config({
 import connectDB from "./DB/index.js";
 import app from "./app.js";
 
+const PORT = 10000;
+
 const startServer = async () => {
     try {
         // Connect to database
         await connectDB();
 
-        // Try different ports starting from the default
-        const startPort = parseInt(process.env.PORT) || 4002;
-        const maxPortAttempts = 10;
-        let server;
-        let currentPort = startPort;
-
-        for (let attempt = 0; attempt < maxPortAttempts; attempt++) {
-            try {
-                server = createServer(app);
-                await new Promise((resolve, reject) => {
-                    server.listen(currentPort)
-                        .once('listening', () => resolve())
-                        .once('error', (err) => {
-                            if (err.code === 'EADDRINUSE') {
-                                console.log(`Port ${currentPort} is busy, trying next port...`);
-                                currentPort++;
-                                server.close();
-                                resolve();
-                            } else {
-                                reject(err);
-                            }
-                        });
-                });
-
-                if (server.listening) {
-                    console.log(`⚙️  Server is running at port: ${currentPort}`);
-                    break;
-                }
-            } catch (err) {
-                console.error(`Error trying port ${currentPort}:`, err);
-                if (attempt === maxPortAttempts - 1) {
-                    throw new Error(`Could not find an available port after ${maxPortAttempts} attempts`);
-                }
+        const server = createServer(app);
+        
+        server.on('error', (error) => {
+            if (error.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use. Please try a different port or kill the process using this port.`);
+                process.exit(1);
+            } else {
+                console.error('Server error:', error);
+                process.exit(1);
             }
-        }
+        });
+
+        server.listen(PORT, () => {
+            console.log(`⚙️  Server is running at port: ${PORT}`);
+        });
 
         // Handle graceful shutdown
         const gracefulShutdown = () => {
